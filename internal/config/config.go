@@ -52,6 +52,7 @@ type OffsiteYAML struct {
 }
 
 type Service struct {
+	Disabled   bool         `yaml:"disabled"`
 	EnvFile    string       `yaml:"env_file"`
 	Procedures []*Procedure `yaml:"procedures"`
 
@@ -168,6 +169,10 @@ func Load(envValues map[string]string, yamlPath string) (*Config, error) {
 		return nil, fmt.Errorf("%s: defaults.restic_repo is required", yamlPath)
 	}
 	for svcName, svc := range cfg.Services {
+		if svc.Disabled {
+			delete(cfg.Services, svcName)
+			continue
+		}
 		if len(svc.Procedures) == 0 {
 			return nil, fmt.Errorf("%s: service %s has no procedures", yamlPath, svcName)
 		}

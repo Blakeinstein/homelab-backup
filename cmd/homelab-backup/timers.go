@@ -34,8 +34,7 @@ func installTimers(env *config.Env, cfg *config.Config) error {
 	}
 	envArg := "--env " + envArgPath
 
-	installTimers := []string{"homelab-backup.service"} // keep list of units for single-timer
-	_ = installTimers
+	var _ = struct{}{}
 
 	// Shared service unit: runs every due procedure (each timer triggers the
 	// same util but scoped to one procedure for OnCalendar precision).
@@ -47,7 +46,7 @@ Type=oneshot
 ExecStart=%s %s run-scheduled
 `, bin, envArg)
 
-	servicePath := filepath.Join(unitDir, "homelab-backup.service")
+	servicePath := filepath.Join(unitDir, "homelab-backup-sweeper.service")
 	if err := os.WriteFile(servicePath, []byte(sharedService), 0o644); err != nil {
 		return err
 	}
@@ -107,23 +106,29 @@ ExecStart=%s %s run %s %s
 
 func enableTimers(cfg *config.Config, unitDir string) error {
 	want := map[string]bool{
-		"homelab-backup.service": true,
+		"homelab-backup-sweeper": true,
 	}
 	for svcName, svc := range cfg.Services {
 		for _, proc := range svc.Procedures {
 			want[unitName(svcName, proc.ID)] = true
 		}
 	}
-	// disable stale
+	// disable and delete stale units from removed procedures
 	entries, _ := os.ReadDir(unitDir)
 	for _, e := range entries {
 		name := strings.TrimSuffix(e.Name(), ".timer")
-		if e.Name() != e.Name() {
+		name = strings.TrimSuffix(name, ".service")
+		if !strings.HasPrefix(e.Name(), "homelab-backup-") {
 			continue
 		}
-		if strings.HasPrefix(e.Name(), "homelab-backup-") && strings.HasSuffix(e.Name(), ".timer") && !want[name] {
+		uid := strings.TrimPrefix(name, "homelab-backup-")
+		isMain := e.Name() == "homelab-backup-sweeper.service" || e.Name() == "homelab-backup.service"
+		wanted := want[name] || isMain
+		if !wanted {
 			_ = exec.Command("systemctl", "--user", "disable", "--now", e.Name()).Run()
+			_ = os.Remove(filepath.Join(unitDir, e.Name()))
 		}
+		_ = uid // uid available if finer checks needed
 	}
 	for _, u := range wantedTimers(cfg) {
 		timer := u + ".timer"
