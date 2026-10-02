@@ -110,7 +110,10 @@ func serve(envPath string) {
 		renderRows(w, env, cfg, svcName, procID)
 	})
 
-	addr := "127.0.0.1:" + env.Port
+	addr := env.Addr + ":" + env.Port
+	if env.Addr == "" {
+		addr = "127.0.0.1:" + env.Port
+	}
 	srv := &http.Server{Addr: addr, Handler: logHandler(h), ReadHeaderTimeout: 10 * time.Second}
 	srv.ListenAndServe()
 }

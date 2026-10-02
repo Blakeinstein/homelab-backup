@@ -20,6 +20,7 @@ type Env struct {
 	StateDir        string
 	ContainerBaseDir string
 	Port            string
+	Addr            string
 	OffsiteHost     string
 	OffsitePath     string
 	EnvPath         string
@@ -129,6 +130,7 @@ func LoadEnv(path string) (*Env, error) {
 		StateDir:        values["HOMELAB_BACKUP_STATE"],
 		ContainerBaseDir: values["HOMELAB_CONTAINER_BASE_DIR"],
 		Port:            valueOr(values, "HOMELAB_BACKUP_PORT", "3095"),
+		Addr:            valueOr(values, "HOMELAB_BACKUP_ADDR", ""),
 		OffsiteHost:     values["OFFSITE_HOST"],
 		OffsitePath:     values["OFFSITE_PATH"],
 		EnvPath:         path,
