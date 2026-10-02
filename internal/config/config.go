@@ -54,6 +54,7 @@ type OffsiteYAML struct {
 type Service struct {
 	Disabled   bool         `yaml:"disabled"`
 	EnvFile    string       `yaml:"env_file"`
+	Logo       string       `yaml:"logo,omitempty"` // optional on-disk image override
 	Procedures []*Procedure `yaml:"procedures"`
 
 	// envVars holds the per-service credentials, loaded from EnvFile at runtime.

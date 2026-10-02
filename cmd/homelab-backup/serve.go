@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"io"
 	"strings"
 	"sync"
 	"time"
@@ -31,6 +32,8 @@ type row struct {
 	Service    string
 	Procedure  string
 	Type       string
+	Logo       string // /logo/<service> or empty for generic
+	HasLogo    bool
 	Schedule   string
 	NextRun    string
 	Latest     *store.Run
@@ -66,6 +69,34 @@ func serve(envPath string) {
 			"EnvPath": env.EnvPath,
 			"OffsiteHost": offsiteHost(env, cfg),
 		})
+	})
+
+	// Per-service logos, resolved against the embedded asset set with an
+	// optional per-service override (service.logo = file path on disk).
+	h.HandleFunc("GET /logo/{svc}", func(w http.ResponseWriter, r *http.Request) {
+		svcName := r.PathValue("svc")
+		if cfg := reload(); cfg != nil {
+			if svc, ok := cfg.Services[svcName]; ok && svc.Logo != "" {
+				if b, err := os.ReadFile(svc.Logo); err == nil {
+					w.Header().Set("Content-Type", mimeOf(svc.Logo))
+					w.Write(b)
+					return
+				}
+			}
+		}
+		for _, ext := range []string{".svg", ".png"} {
+			asset := "assets/" + svcName + ext
+			if web.HasAsset(asset) {
+				f, err := web.Asset(asset)
+				if err == nil {
+					defer f.Close()
+					w.Header().Set("Content-Type", mimeOf(asset))
+					io.Copy(w, f)
+					return
+				}
+			}
+		}
+		http.NotFound(w, r)
 	})
 
 	h.HandleFunc("POST /run/{svc}/{proc}", func(w http.ResponseWriter, r *http.Request) {
@@ -146,6 +177,8 @@ func buildRows(env *config.Env, cfg *config.Config) []row {
 		_ = svcEnv
 		for _, proc := range svc.Procedures {
 			r := row{Service: svcName, Procedure: proc.ID, Type: proc.Type, Schedule: proc.Schedule}
+			r.Logo = "/logo/" + svcName
+			r.HasLogo = web.HasAsset("assets/"+svcName+".svg") || web.HasAsset("assets/"+svcName+".png") || svc.Logo != ""
 			if c, err := schedule.Parse(proc.Schedule); err == nil {
 				r.NextRun = c.Next(time.Now()).Format(time.RFC1123 )
 			} else {
@@ -201,7 +234,7 @@ func render(w http.ResponseWriter, name string, data any) {
 }
 
 func loadTemplates() (*template.Template, error) {
-	funcs := template.FuncMap{"fmtBytes": fmtBytes}
+	funcs := template.FuncMap{"fmtBytes": fmtBytes, "upper": strings.ToUpper}
 	for _, d := range []string{os.Getenv("HOMELAB_BACKUP_TEMPLATES"), "web"} {
 		if d == "" {
 			continue
@@ -214,6 +247,20 @@ func loadTemplates() (*template.Template, error) {
 		return t, nil
 	}
 	return nil, fmt.Errorf("templates not found")
+}
+
+// mimeOf maps an asset filename extension to a content type.
+func mimeOf(name string) string {
+	switch {
+	case strings.HasSuffix(name, ".svg"):
+		return "image/svg+xml"
+	case strings.HasSuffix(name, ".png"):
+		return "image/png"
+	case strings.HasSuffix(name, ".ico"):
+		return "image/x-icon"
+	default:
+		return "application/octet-stream"
+	}
 }
 
 // fmtBytes renders byte counts in human units.

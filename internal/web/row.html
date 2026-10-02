@@ -1,6 +1,11 @@
 {{define "row.html"}}
 <tr id="row-{{.Service}}-{{.Procedure}}">
-  <td>{{.Service}}</td>
+  <td>
+    <div class="svc">
+      {{if .HasLogo}}<img src="{{.Logo}}" alt="{{.Service}}" class="logo">{{else}}<span class="logo fallback">{{index .Service 0 | upper}}</span>{{end}}
+      <span>{{.Service}}</span>
+    </div>
+  </td>
   <td>{{.Procedure}}</td>
   <td class="muted">{{.Type}}</td>
   <td><code class="muted">{{.Schedule}}</code></td>
