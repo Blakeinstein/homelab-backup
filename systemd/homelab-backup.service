@@ -1,0 +1,12 @@
+[Unit]
+Description=homelab-backup dashboard and backup agent
+After=network-online.target
+
+[Service]
+EnvironmentFile=%h/work/homelab-backup/homelab-backup.env
+ExecStart=%h/work/homelab-backup/bin/homelab-backup --env %h/work/homelab-backup/homelab-backup.env serve
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,29 @@
+{{define "row.html"}}
+<tr id="row-{{.Service}}-{{.Procedure}}">
+  <td>{{.Service}}</td>
+  <td>{{.Procedure}}</td>
+  <td class="muted">{{.Type}}</td>
+  <td><code class="muted">{{.Schedule}}</code></td>
+  <td class="muted">{{if .Latest}}{{.Latest.StartedAt.Format "2006-01-02 15:04"}} ({{printf "%.0f" .Latest.Duration}}s){{else}}never{{end}}</td>
+  <td>
+    {{if .Running}}
+      <span class="pill running">running…</span>
+    {{else if .Latest}}
+      <span class="pill {{.Latest.Status}}">{{.Latest.Status}}</span>
+      {{if .Latest.Message}}<div class="msg">{{.Latest.Message}}</div>{{end}}
+    {{else}}
+      <span class="pill never">no runs</span>
+    {{end}}
+  </td>
+  <td class="muted">{{if .Latest}}{{fmtBytes .Latest.Bytes}}{{end}}</td>
+  <td class="muted">{{if .NextRun}}{{.NextRun}}{{else}}bad schedule{{end}}</td>
+  <td>
+    <button class="run"
+      hx-post="/run/{{.Service}}/{{.Procedure}}"
+      hx-target="#row-{{.Service}}-{{.Procedure}}"
+      hx-swap="outerHTML"
+      hx-disabled-elt="this">Run now</button>
+  </td>
+</tr>
+{{end}}
+{{define "rowlist"}}{{range .}}{{template "row.html" .}}{{end}}{{end}}
