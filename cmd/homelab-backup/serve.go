@@ -71,17 +71,31 @@ func serve(envPath string) {
 		})
 	})
 
-	// Per-service logos, resolved against the embedded asset set with an
-	// optional per-service override (service.logo = file path on disk).
+	// Per-service logos. Resolution order:
+	//  1. backup-services.yaml `logo:` or the service's app.yaml `icon:` (Homeio's field),
+	//     either a direct URL (cached in the state dir) or a local path
+	//  2. built-in embedded assets
 	h.HandleFunc("GET /logo/{svc}", func(w http.ResponseWriter, r *http.Request) {
 		svcName := r.PathValue("svc")
+		src := ""
 		if cfg := reload(); cfg != nil {
-			if svc, ok := cfg.Services[svcName]; ok && svc.Logo != "" {
-				if b, err := os.ReadFile(svc.Logo); err == nil {
-					w.Header().Set("Content-Type", mimeOf(svc.Logo))
-					w.Write(b)
-					return
-				}
+			if svc, ok := cfg.Services[svcName]; ok {
+				src = svc.ResolveIcon(env, svcName)
+			}
+		}
+		switch {
+		case src == "":
+		case strings.HasPrefix(src, "http://"), strings.HasPrefix(src, "https://"):
+			if b, err := fetchLogo(env.StateDir, svcName, src); err == nil {
+				w.Header().Set("Content-Type", sniffMime(b))
+				w.Write(b)
+				return
+			}
+		default:
+			if b, err := os.ReadFile(src); err == nil {
+				w.Header().Set("Content-Type", mimeOf(src))
+				w.Write(b)
+				return
 			}
 		}
 		for _, ext := range []string{".svg", ".png"} {
@@ -247,6 +261,65 @@ func loadTemplates() (*template.Template, error) {
 		return t, nil
 	}
 	return nil, fmt.Errorf("templates not found")
+}
+
+// fetchLogo downloads and caches a remote icon in <state>/logos/<svc>.
+// Cache lives for 24h; always returns the cached bytes on download failure
+// (stale is better than nothing).
+func fetchLogo(stateDir, svcName, url string) ([]byte, error) {
+	dir := filepath.Join(stateDir, "logos")
+	path := filepath.Join(dir, svcName)
+	meta := path + ".meta"
+
+	lookup := func() ([]byte, bool) {
+		fi, err := os.Stat(path)
+		if err != nil || fi.Size() == 0 {
+			return nil, false
+		}
+		if mi, err := os.Stat(meta); err == nil && time.Since(mi.ModTime()) > 24*time.Hour {
+			return nil, false // cached but too old; try refresh below
+		}
+		b, err := os.ReadFile(path)
+		return b, err == nil
+	}
+	if b, ok := lookup(); ok {
+		return b, nil
+	}
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
+	if err != nil {
+		return os.ReadFile(path) // serve stale
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return os.ReadFile(path) // serve stale
+	}
+	b, _ := io.ReadAll(io.LimitReader(resp.Body, 2*1024*1024))
+	_ = os.MkdirAll(dir, 0o755)
+	_ = os.WriteFile(path, b, 0o644)
+	_ = os.Chtimes(meta, time.Now(), time.Now()) // only updates mtime if exists
+	if _, err := os.Stat(meta); os.IsNotExist(err) {
+		_ = os.WriteFile(meta, []byte(url), 0o644)
+		return b, nil
+	}
+	return b, nil
+}
+
+// sniffMime picks a conservative content type for icon bytes.
+func sniffMime(b []byte) string {
+	if len(b) > 4 {
+		if string(b[:4]) == "<svg" || string(b[:5]) == "<?xml" {
+			return "image/svg+xml"
+		}
+		if b[0] == 0x89 && b[1] == 'P' {
+			return "image/png"
+		}
+	}
+	return mimeOf(".png")
 }
 
 // mimeOf maps an asset filename extension to a content type.

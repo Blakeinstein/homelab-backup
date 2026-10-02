@@ -73,6 +73,16 @@ restic dump latest <svc>-<proc>.sql.gz | gunzip | \
   podman exec -i -e PGPASSWORD=… <db-container> psql -U <user> -d postgres
 ```
 
+## Logos
+
+The dashboard resolves each service's icon as follows:
+1. `logo:` in `backup-services.yaml` — a direct URL or a local path
+2. the service's `app.yaml` `icon:` field (same convention Homeio uses for its
+   app tiles, so both dashboards share one value; define it once)
+3. built-in embedded icons, then a letter badge
+
+Remote icons are downloaded once and cached in `<STATE_DIR>/logos/` for 24h.
+
 ## Adding a service
 
 Add a block to `backup-services.yaml` (env_file + procedures + schedules),

@@ -52,10 +52,10 @@ type OffsiteYAML struct {
 }
 
 type Service struct {
-	Disabled   bool         `yaml:"disabled"`
-	EnvFile    string       `yaml:"env_file"`
-	Logo       string       `yaml:"logo,omitempty"` // optional on-disk image override
-	Procedures []*Procedure `yaml:"procedures"`
+	Disabled      bool         `yaml:"disabled"`
+	EnvFile       string       `yaml:"env_file"`
+	Logo          string       `yaml:"logo,omitempty"` // optional icon override: URL or local path
+	Procedures    []*Procedure `yaml:"procedures"`
 
 	// envVars holds the per-service credentials, loaded from EnvFile at runtime.
 	envVars map[string]string
@@ -187,6 +187,36 @@ func Load(envValues map[string]string, yamlPath string) (*Config, error) {
 		}
 	}
 	return &cfg, nil
+}
+
+// ResolveIcon returns the effective icon source for a service:
+// 1. backup-services.yaml `logo:` (URL or local path)
+// 2. the app.yaml `icon:` next to the service units (Homeio's field — same
+//    value Homeio itself uses for the app tile icon)
+// Empty when neither is set.
+func (s *Service) ResolveIcon(env *Env, svcName string) string {
+	if s.Logo != "" {
+		return s.Logo
+	}
+	dir := ""
+	if p := s.EnvFile; p != "" && !strings.Contains(p, "${") {
+		dir = filepath.Dir(p)
+	}
+	if dir == "" {
+		dir = filepath.Join(env.ContainerBaseDir, svcName)
+	}
+	appYaml := filepath.Join(dir, "app.yaml")
+	data, err := os.ReadFile(appYaml)
+	if err != nil {
+		return ""
+	}
+	var app struct {
+		Icon string `yaml:"icon"`
+	}
+	if yaml.Unmarshal(data, &app) == nil {
+		return app.Icon
+	}
+	return ""
 }
 
 // LoadServiceEnv reads a service's own .env file for credentials.
