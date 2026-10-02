@@ -49,7 +49,81 @@ type OffsiteYAML struct {
 	Path    string `yaml:"path"`
 	Flags   string `yaml:"flags"`
 	SSHUser string `yaml:"ssh_user"`
+	SSHKey  string `yaml:"ssh_key"`
+
+	// Targets is the optional list of rsync destinations. When present it
+	// replaces the legacy single Host/Path target above.
+	Targets []OffsiteTarget `yaml:"targets,omitempty"`
 }
+
+// OffsiteTarget is one rsync push destination.
+type OffsiteTarget struct {
+	Name    string `yaml:"name"`
+	Enabled *bool  `yaml:"enabled,omitempty"` // absent = enabled
+	Host    string `yaml:"host"`
+	Path    string `yaml:"path"`
+	SSHUser string `yaml:"ssh_user,omitempty"`
+	SSHKey  string `yaml:"ssh_key,omitempty"`
+	Flags   string `yaml:"flags,omitempty"`
+}
+
+// IsEnabled reports whether the target should participate in pushes.
+func (t *OffsiteTarget) IsEnabled() bool {
+	return t.Enabled == nil || *t.Enabled
+}
+
+// Destination renders the rsync [user@]host:path form.
+func (t *OffsiteTarget) Destination() string {
+	user := ""
+	if t.SSHUser != "" {
+		user = t.SSHUser + "@"
+	}
+	return user + t.Host + ":" + t.Path
+}
+
+// OffsiteTargets returns the effective push destinations: the explicit
+// targets list when present, otherwise the legacy single Host/Path (with
+// .env fallbacks for host/path/ssh key).
+func (c *Config) OffsiteTargets(env *Env) []OffsiteTarget {
+	var out []OffsiteTarget
+	keyFallback := ""
+	if env != nil {
+		keyFallback = env.Values["OFFSITE_SSH_KEY"]
+	}
+	if len(c.Offsite.Targets) > 0 {
+		for _, t := range c.Offsite.Targets {
+			if !t.IsEnabled() {
+				continue
+			}
+			if t.SSHKey == "" {
+				t.SSHKey = keyFallback
+			}
+			out = append(out, t)
+		}
+		return out
+	}
+	host, path := c.Offsite.Host, c.Offsite.Path
+	if host == "" && env != nil {
+		host = env.OffsiteHost
+	}
+	if path == "" && env != nil {
+		path = env.OffsitePath
+	}
+	if host == "" || path == "" {
+		return nil
+	}
+	key := c.Offsite.SSHKey
+	if key == "" {
+		key = keyFallback
+	}
+	return append(out, OffsiteTarget{
+		Name: "primary", Enabled: bPtr(true),
+		Host: host, Path: path,
+		SSHUser: c.Offsite.SSHUser, SSHKey: key, Flags: c.Offsite.Flags,
+	})
+}
+
+func bPtr(v bool) *bool { return &v }
 
 type Service struct {
 	Disabled   bool         `yaml:"disabled"`

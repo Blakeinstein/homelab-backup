@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>homelab-backup — settings</title>
+  {{template "style"}}
+</head>
+<body>
+  <h1>Settings</h1>
+  <p class="sub">agent env: {{.EnvPath}} &middot; backups yaml: {{.ConfigPath}}</p>
+  {{template "nav" .Nav}}
+  {{if .Flash}}<div class="flash">{{.Flash}}</div>{{end}}
+  {{if .CfgError}}<div class="err-banner">Backups yaml failed to parse (fix it on the <a href="/settings/backups">Backups config</a> page or by hand):
+{{.CfgError}}</div>{{end}}
+
+  <h2>Root settings <span class="muted">(.env file)</span></h2>
+  <form method="post" action="/settings/env">
+    <div class="grid">
+      {{range .Fields}}
+      <div class="field">
+        <label for="{{.Key}}">{{.Key}}</label>
+        <input type="text" id="{{.Key}}" name="{{.Key}}" value="{{.Value}}" autocomplete="off">
+        <div class="hint">{{.Hint}}</div>
+      </div>
+      {{end}}
+    </div>
+    <p><button>Save root settings</button></p>
+  </form>
+
+  {{if .Defaults}}
+  <h2>Backup defaults <span class="muted">(backup-services.yaml)</span></h2>
+  <form method="post" action="/settings/defaults">
+    <div class="grid">
+      <div class="field">
+        <label for="restic_repo">restic repository (defaults.restic_repo)</label>
+        <input type="text" id="restic_repo" name="restic_repo" value="{{.Defaults.ResticRepo}}" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="keep_daily">keep daily snapshots</label>
+        <input type="number" id="keep_daily" name="keep_daily" value="{{.Defaults.KeepDaily}}" min="0">
+        <div class="hint">0 = run defaults (7); both 0 = retention off</div>
+      </div>
+      <div class="field">
+        <label for="keep_weekly">keep weekly snapshots</label>
+        <input type="number" id="keep_weekly" name="keep_weekly" value="{{.Defaults.KeepWeekly}}" min="0">
+        <div class="hint">0 = run defaults (4)</div>
+      </div>
+    </div>
+    <p><button>Save defaults</button></p>
+  </form>
+
+  <h2>Offsite rsync — master &amp; legacy primary <span class="muted">(backup-services.yaml)</span></h2>
+  <form method="post" action="/settings/offsite">
+    <div class="checks">
+      <label><input type="checkbox" name="enabled" {{if .Offsite.Enabled}}checked{{end}}> offsite sync enabled</label>
+    </div>
+    <div class="grid">
+      <div class="field">
+        <label for="host">host (legacy primary)</label>
+        <input type="text" id="host" name="host" value="{{.Offsite.Host}}" autocomplete="off">
+        <div class="hint">Used only while no targets are listed below; empty = .env fallback</div>
+      </div>
+      <div class="field">
+        <label for="ssh_user">ssh user (legacy primary)</label>
+        <input type="text" id="ssh_user" name="ssh_user" value="{{.Offsite.SSHUser}}" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="path">path (legacy primary)</label>
+        <input type="text" id="path" name="path" value="{{.Offsite.Path}}" autocomplete="off">
+        <div class="hint">Used only while no targets are listed below; empty = .env fallback</div>
+      </div>
+      <div class="field">
+        <label for="ssh_key">ssh key</label>
+        <input type="text" id="ssh_key" name="ssh_key" value="{{.Offsite.SSHKey}}" autocomplete="off">
+        <div class="hint">rsync -e "ssh -i <key>" for pushes that don't set their own</div>
+      </div>
+      <div class="field">
+        <label for="flags">rsync flags (legacy primary)</label>
+        <input type="text" id="flags" name="flags" value="{{.Offsite.Flags}}" autocomplete="off">
+        <div class="hint">default: -az --partial --delete --info=stats1</div>
+      </div>
+    </div>
+    <p><button>Save offsite</button></p>
+  </form>
+
+  <h2>RSync targets <span class="muted">(offsite.targets — replaces the legacy primary host/path above)</span></h2>
+  {{if not .Offsite.Targets}}<p class="muted">No extra targets — pushes go to the legacy primary host/path (or the .env fallback). Add one for fan-out to multiple destinations.</p>{{end}}
+  {{range .Offsite.Targets}}
+  <details>
+    <summary><code>{{.Name}}</code> &rarr; <code>{{.Host}}</code>{{if not .Enabled}} <span class="pill never">disabled</span>{{end}}</summary>
+    <form method="post" action="/settings/target">
+      <input type="hidden" name="name" value="{{.Name}}">
+      <div class="checks"><label><input type="checkbox" name="enabled" {{if .Enabled}}checked{{end}}> enabled</label></div>
+      <div class="grid">
+        <div class="field"><label>host</label><input type="text" name="host" value="{{.Host}}"></div>
+        <div class="field"><label>path</label><input type="text" name="path" value="{{.Path}}"></div>
+        <div class="field"><label>ssh user</label><input type="text" name="ssh_user" value="{{.SSHUser}}"></div>
+        <div class="field"><label>ssh key</label><input type="text" name="ssh_key" value="{{.SSHKey}}"></div>
+        <div class="field"><label>rsync flags</label><input type="text" name="flags" value="{{.Flags}}"></div>
+      </div>
+      <p class="actions">
+        <button>Save target</button>
+        <button class="danger" formaction="/settings/target-delete" formnovalidate onclick="return confirm('Delete rsync target {{.Name}}?')">Delete</button>
+      </p>
+    </form>
+  </details>
+  {{end}}
+  <details>
+    <summary>Add rsync target</summary>
+    <form method="post" action="/settings/target">
+      <div class="grid">
+        <div class="field"><label>name</label><input type="text" name="name" placeholder="nas-nightly"></div>
+        <div class="field"><label>host</label><input type="text" name="host" placeholder="nas.local"></div>
+        <div class="field"><label>path</label><input type="text" name="path" placeholder="/mnt/backups/homelab"></div>
+        <div class="field"><label>ssh user</label><input type="text" name="ssh_user"></div>
+        <div class="field"><label>ssh key</label><input type="text" name="ssh_key"></div>
+        <div class="field"><label>rsync flags</label><input type="text" name="flags"></div>
+      </div>
+      <div class="checks"><label><input type="checkbox" name="enabled" checked> enabled</label></div>
+      <p><button>Add target</button></p>
+    </form>
+  </details>
+
+  <div class="actions">
+    <form method="post" action="/settings/offsite-push" style="display:inline"><button>Push to all targets now</button></form>
+  </div>
+
+  {{if .Recent}}
+  <h2>Recent offsite pushes</h2>
+  <table>
+    <thead><tr><th>Target</th><th>When</th><th>Took</th><th>Result</th></tr></thead>
+    <tbody>
+      {{range .Recent}}
+      <tr>
+        <td><code>{{.Procedure}}</code></td>
+        <td class="muted">{{.StartedAt.Format "2006-01-02 15:04:05"}}</td>
+        <td class="muted">{{printf "%.0f" .Duration}}s</td>
+        <td>
+          {{if .Message}}<div class="msg">{{.Message}}</div>{{end}}
+          <span class="pill {{.Status}}">{{.Status}}</span>
+        </td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{end}}
+  {{end}}
+</body>
+</html>

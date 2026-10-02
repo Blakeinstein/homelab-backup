@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>homelab-backup — {{.Name}}</title>
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  {{template "style"}}
+</head>
+<body>
+  <h1>{{if .HasLogo}}<img src="/logo/{{.Name}}" alt="{{.Name}}" class="logo" style="vertical-align:-4px"> {{end}}{{.Name}}</h1>
+  <p class="sub">All backup procedures and run history for this app.</p>
+  {{template "nav" .Nav}}
+  {{if .Flash}}<div class="flash">{{.Flash}}</div>{{end}}
+
+  <h2>Procedures</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Procedure</th><th>Type</th><th>Schedule</th>
+        <th>Last run</th><th>Result</th><th>Size</th><th>Next run</th><th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .Rows}}{{template "row.html" .}}{{end}}
+    </tbody>
+  </table>
+  {{if not .Rows}}<p class="muted">This service has no procedures yet.</p>{{end}}
+
+  <h2>Run history</h2>
+  {{if .History}}
+  <table>
+    <thead>
+      <tr><th>Procedure</th><th>Started</th><th>Took</th><th>Result</th><th>Size</th><th>Snapshot</th><th></th></tr>
+    </thead>
+    <tbody>
+      {{range .History}}
+      <tr>
+        <td><code>{{.Procedure}}</code></td>
+        <td class="muted">{{.StartedAt.Format "2006-01-02 15:04:05"}}</td>
+        <td class="muted">{{printf "%.0f" .Duration}}s</td>
+        <td><span class="pill {{.Status}}">{{.Status}}</span>{{if .Message}}<div class="msg">{{.Message}}</div>{{end}}</td>
+        <td class="muted">{{fmtBytes .Bytes}}</td>
+        <td><code class="muted">{{.SnapshotID}}</code></td>
+        <td class="muted">{{if .SnapshotID}}<a class="btn small" href="/download/{{.Service}}/{{.Procedure}}?snap={{.SnapshotID}}">Download</a>{{end}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p class="muted">No runs recorded yet — the history lives in <code>state/runs.jsonl</code>.</p>
+  {{end}}
+</body>
+</html>

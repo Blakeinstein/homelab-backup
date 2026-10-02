@@ -5,42 +5,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>homelab-backup</title>
   <script src="https://unpkg.com/htmx.org@2.0.4"></script>
-  <style>
-    :root { color-scheme: dark; }
-    body { font-family: ui-sans-serif, system-ui, sans-serif; background:#0f1115; color:#e6e6e6; margin:0; padding:2rem; }
-    h1 { font-size:1.4rem; margin:0 0 .4rem; }
-    .sub { color:#8a93a5; font-size:.85rem; margin-bottom:1.5rem; }
-    .svc { display:flex; align-items:center; gap:.55rem; }
-    .logo { width:22px; height:22px; object-fit:contain; }
-    .logo.fallback { display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:6px; background:#242830; color:#8a93a5; font-size:.7rem; font-weight:700; }
-    table { border-collapse: collapse; width: 100%; }
-    th, td { text-align:left; padding:.55rem .75rem; border-bottom:1px solid #23262e; font-size:.9rem; vertical-align:top; }
-    th { color:#8a93a5; font-weight:600; text-transform:uppercase; font-size:.7rem; letter-spacing:.06em; }
-    .pill { display:inline-block; padding:.15rem .6rem; border-radius:999px; font-size:.75rem; font-weight:600; }
-    .success { background:#143d2a; color:#5ee7a0; }
-    .error { background:#4a1f22; color:#ff8f8f; }
-    .never { background:#2a2a2a; color:#a0a0a0; }
-    .running { background:#123c4a; color:#7fd7ff; }
-    button.run { background:#2563eb; color:#fff; border:0; padding:.35rem .8rem; border-radius:6px; cursor:pointer; font-size:.8rem; }
-    button.run:disabled { opacity:.5; cursor:wait; }
-    button.run:hover { background:#1d4ed8; }
-    .muted { color:#8a93a5; font-size:.78rem; }
-    .msg { max-width:28rem; white-space:pre-wrap; font-size:.72rem; color:#c08080; }
-  </style>
+  {{template "style"}}
 </head>
 <body>
   <h1>homelab-backup</h1>
-  <p class="sub">{{.EnvPath}} &middot; offsite: {{if .OffsiteHost}}{{.OffsiteHost}}{{else}}disabled{{end}}</p>
+  <p class="sub">{{.ConfigPath}} &middot; offsite: {{if .OffsiteHost}}{{.OffsiteHost}}{{else}}disabled{{end}}</p>
+  {{template "nav" .Nav}}
+  {{if .Flash}}<div class="flash">{{.Flash}}</div>{{end}}
+  {{if .CfgError}}<div class="err-banner">Config file failed to load (edit it on the <a href="/settings/backups">Backups config</a> page):
+{{.CfgError}}</div>{{end}}
+  {{if .Rows}}
   <table>
     <thead>
       <tr>
         <th>Service</th><th>Procedure</th><th>Type</th><th>Schedule</th>
-        <th>Last run</th><th>Result</th><th>Size</th><th>Next run</th><th></th>
+        <th>Last run</th><th>Result</th><th>Size</th><th>Next run</th><th>Actions</th>
       </tr>
     </thead>
     <tbody>
       {{range .Rows}}{{template "row.html" .}}{{end}}
     </tbody>
   </table>
+  {{end}}
 </body>
 </html>

@@ -61,30 +61,30 @@ func EnsureRepo(env *config.Env, cfg *config.Config) error {
 // Run executes one procedure end-to-end and records the outcome.
 func Run(env *config.Env, cfg *config.Config, svcName string, svc *config.Service, proc *config.Procedure) error {
 	started := time.Now()
-	status, msg := "success", ""
 	run := store.Run{
 		Service:   svcName,
 		Procedure: proc.ID,
 		Type:      proc.Type,
 		StartedAt: started,
-		Status:    status,
-		Message:   msg,
+		Status:    "success",
 	}
 	lastSummary.Warnings = nil
 	err := execute(env, cfg, svcName, svc, proc)
 	run.Duration = time.Since(started).Seconds()
 	if err != nil {
-		status = "error"
-		msg = err.Error()
-	}
-	if status == "success" {
+		// record the real outcome (previously only local vars were set,
+		// leaving failed runs recorded as "success")
+		run.Status = "error"
+		run.Message = err.Error()
+	} else {
 		run.Bytes, run.Files = lastSummary.Bytes, lastSummary.Files
 		if n := len(lastSummary.Warnings); n > 0 {
 			run.Message = strings.Join(lastSummary.Warnings, "\n")
 		}
+		run.SnapshotID = latestSnapshot(env, cfg, svcName, proc.ID)
 	}
-	if err := store.Append(env.StateDir, run); err != nil {
-		fmt.Fprintf(os.Stderr, "WARNING: could not record run: %v\n", err)
+	if appendErr := store.Append(env.StateDir, run); appendErr != nil {
+		fmt.Fprintf(os.Stderr, "WARNING: could not record run: %v\n", appendErr)
 	}
 	if err != nil {
 		return err
@@ -249,6 +249,29 @@ func applyRetention(env *config.Env, cfg *config.Config) error {
 		return restic(env, cfg, "prune")
 	}
 	return nil
+}
+
+// latestSnapshot returns the newest snapshot id for a service/procedure
+// (best-effort; empty string on any error so runs still record).
+func latestSnapshot(env *config.Env, cfg *config.Config, svc, proc string) string {
+	out, err := resticOut(env, cfg, "snapshots", "--json", "--tag", "service:"+svc, "--tag", "procedure:"+proc)
+	if err != nil {
+		return ""
+	}
+	var snaps []struct {
+		ID   string `json:"id"`
+		Time string `json:"time"`
+	}
+	if json.Unmarshal(out, &snaps) != nil || len(snaps) == 0 {
+		return ""
+	}
+	newest := snaps[0]
+	for _, s := range snaps[1:] {
+		if s.Time > newest.Time {
+			newest = s
+		}
+	}
+	return newest.ID
 }
 
 func resticBin() string {
