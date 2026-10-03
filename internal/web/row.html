@@ -3,7 +3,7 @@
   <td>
     <div class="svc">
       {{if .HasLogo}}<img src="{{.Logo}}" alt="{{.Service}}" class="logo">{{else}}<span class="logo fallback">{{index .Service 0 | upper}}</span>{{end}}
-      <span>{{.Service}}</span>
+      <a href="/service/{{.Service}}" style="color:inherit;text-decoration:none">{{.Service}}</a>
     </div>
   </td>
   <td>{{.Procedure}}</td>
@@ -23,11 +23,16 @@
   <td class="muted">{{if .Latest}}{{fmtBytes .Latest.Bytes}}{{end}}</td>
   <td class="muted">{{if .NextRun}}{{.NextRun}}{{else}}bad schedule{{end}}</td>
   <td>
-    <button class="run"
-      hx-post="/run/{{.Service}}/{{.Procedure}}"
-      hx-target="#row-{{.Service}}-{{.Procedure}}"
-      hx-swap="outerHTML"
-      hx-disabled-elt="this">Run now</button>
+    <div class="actions">
+      <button class="run"
+        hx-post="/run/{{.Service}}/{{.Procedure}}"
+        hx-target="#row-{{.Service}}-{{.Procedure}}"
+        hx-swap="outerHTML"
+        hx-disabled-elt="this">Run now</button>
+      {{if .Latest}}<a class="btn small" href="/download/{{.Service}}/{{.Procedure}}">Download</a>{{end}}
+      <a class="btn small" href="/service/{{.Service}}">History</a>
+      <a class="btn small" href="/snapshots/{{.Service}}/{{.Procedure}}">Snapshots</a>
+    </div>
   </td>
 </tr>
 {{end}}

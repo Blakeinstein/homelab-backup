@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>homelab-backup — backups config</title>
+  {{template "style"}}
+</head>
+<body>
+  <h1>Backups config</h1>
+  <p class="sub">Edits are written straight back to <code>{{.ConfigPath}}</code> (validated, atomic). ${VAR} references stay as-is.</p>
+  {{template "nav" .Nav}}
+  {{if .Flash}}<div class="flash">{{.Flash}}</div>{{end}}
+  {{if .CfgError}}<div class="err-banner">{{.CfgError}}</div>{{end}}
+
+  <p class="actions">
+    <form method="post" action="/settings/backups/timers" style="display:inline">
+      <button class="small">Reinstall systemd timers</button>
+    </form>
+  </p>
+
+  {{range .Services}}
+  <details>
+    <summary>
+      {{.Name}}
+      {{if .Disabled}}<span class="pill never">disabled</span>{{end}}
+      <span class="muted">({{len .Procs}} procedures)</span>
+    </summary>
+
+    <h2>Service settings</h2>
+    <form method="post" action="/settings/backups/service">
+      <input type="hidden" name="orig" value="{{.Name}}">
+      <div class="grid">
+        <div class="field">
+          <label>name</label>
+          <input type="text" name="name" value="{{.Name}}">
+          <div class="hint">Renaming rewrites the yaml key; stale timers are cleaned up.</div>
+        </div>
+        <div class="field">
+          <label>env_file</label>
+          <input type="text" name="env_file" value="{{.EnvFile}}">
+          <div class="hint">Path to this service's .env (credentials stay in the file system, never here).</div>
+        </div>
+        <div class="field">
+          <label>logo (optional path)</label>
+          <input type="text" name="logo" value="{{.Logo}}">
+        </div>
+      </div>
+      <div class="checks"><label><input type="checkbox" name="disabled" {{if .Disabled}}checked{{end}}> disabled</label></div>
+      <p><button>Save service</button></p>
+    </form>
+
+    <h2>Procedures</h2>
+    {{range .Procs}}
+    <details>
+      <summary><code>{{.ID}}</code> <span class="muted">({{.Type}} · {{.Schedule}})</span></summary>
+      <form method="post" action="/settings/backups/proc">
+        <input type="hidden" name="svc" value="{{.Svc}}">
+        <input type="hidden" name="orig" value="{{.ID}}">
+        <div class="grid">
+          <div class="field">
+            <label>id</label>
+            <input type="text" name="id" value="{{.ID}}">
+          </div>
+          <div class="field">
+            <label>type</label>
+            <select name="type">
+              <option value="files" {{if eq .Type "files"}}selected{{end}}>files</option>
+              <option value="postgres_dump" {{if eq .Type "postgres_dump"}}selected{{end}}>postgres_dump</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>schedule (cron)</label>
+            <input type="text" name="schedule" value="{{.Schedule}}">
+          </div>
+          <div class="field">
+            <label>container (postgres_dump)</label>
+            <input type="text" name="container" value="{{.Container}}">
+          </div>
+          <div class="field">
+            <label>db_user (postgres_dump)</label>
+            <input type="text" name="db_user" value="{{.DBUser}}">
+          </div>
+          <div class="field">
+            <label>db_password_env (postgres_dump)</label>
+            <input type="text" name="db_password_env" value="{{.DBPassEnv}}">
+            <div class="hint">Variable name inside the service env_file — the value is never stored here.</div>
+          </div>
+        </div>
+        <div class="field">
+          <label>paths (files, one per line)</label>
+          <textarea name="paths">{{.Paths}}</textarea>
+        </div>
+        <p class="actions">
+          <button>Save procedure</button>
+          <button class="danger" formaction="/settings/backups/proc-delete" formnovalidate onclick="return confirm('Delete procedure {{.ID}} from {{.Svc}}?')">Delete</button>
+        </p>
+      </form>
+    </details>
+    {{end}}
+
+    <details>
+      <summary>Add procedure</summary>
+      <form method="post" action="/settings/backups/proc">
+        <input type="hidden" name="svc" value="{{.Name}}">
+        <input type="hidden" name="orig" value="">
+        <div class="grid">
+          <div class="field"><label>id</label><input type="text" name="id" placeholder="uploads"></div>
+          <div class="field">
+            <label>type</label>
+            <select name="type">
+              <option value="files">files</option>
+              <option value="postgres_dump">postgres_dump</option>
+            </select>
+          </div>
+          <div class="field"><label>schedule (cron)</label><input type="text" name="schedule" placeholder="0 2 * * *"></div>
+          <div class="field"><label>container</label><input type="text" name="container"></div>
+          <div class="field"><label>db_user</label><input type="text" name="db_user"></div>
+          <div class="field"><label>db_password_env</label><input type="text" name="db_password_env"></div>
+        </div>
+        <div class="field"><label>paths (files, one per line)</label><textarea name="paths"></textarea></div>
+        <p><button>Add procedure</button></p>
+      </form>
+    </details>
+
+    <p class="actions" style="margin-top:1rem">
+      <form method="post" action="/settings/backups/service-delete" style="display:inline"
+        onsubmit="return confirm('Remove service {{.Name}} (and all its procedures) from the yaml?')">
+        <input type="hidden" name="name" value="{{.Name}}">
+        <button class="danger small">Remove service</button>
+      </form>
+    </p>
+  </details>
+  {{end}}
+
+  <details>
+    <summary>Add service</summary>
+    <form method="post" action="/settings/backups/service">
+      <input type="hidden" name="orig" value="">
+      <div class="grid">
+        <div class="field"><label>name</label><input type="text" name="name" placeholder="myservice"></div>
+        <div class="field"><label>env_file</label><input type="text" name="env_file" placeholder="${HOMELAB_CONTAINER_BASE_DIR}/myservice/myservice.env"></div>
+        <div class="field"><label>logo (optional)</label><input type="text" name="logo"></div>
+      </div>
+      <p class="sub">Created with one starter files procedure (id <code>&lt;name&gt;-data</code>, daily 05:00, <code>${HOMELAB_DATA_ROOT}/&lt;name&gt;</code>) — adjust it right after.</p>
+      <p><button>Add service</button></p>
+    </form>
+  </details>
+
+  <div class="sub" style="margin-top:2rem">
+    Saving regenerates the systemd user timers so schedule changes take effect. Retention/restic defaults and offsite targets live on the <a href="/settings">Settings</a> page.
+  </div>
+</body>
+</html>

@@ -16,15 +16,16 @@ import (
 
 // Run is one execution of a procedure.
 type Run struct {
-	Service   string    `json:"service"`
-	Procedure string    `json:"procedure"`
-	Type      string    `json:"type"`
-	StartedAt time.Time `json:"started_at"`
-	Duration  float64   `json:"duration_s"`
-	Status    string    `json:"status"` // success | error | running
-	Message   string    `json:"message,omitempty"`
-	Bytes     int64     `json:"bytes_added"`
-	Files     int64     `json:"files_processed"`
+	Service    string    `json:"service"`
+	Procedure  string    `json:"procedure"`
+	Type       string    `json:"type"`
+	StartedAt  time.Time `json:"started_at"`
+	Duration   float64   `json:"duration_s"`
+	Status     string    `json:"status"` // success | error | running
+	Message    string    `json:"message,omitempty"`
+	Bytes      int64     `json:"bytes_added"`
+	Files      int64     `json:"files_processed"`
+	SnapshotID string    `json:"snapshot_id,omitempty"` // restic snapshot of this run
 }
 
 var mu sync.Mutex

@@ -56,6 +56,26 @@ systemctl --user enable --now homelab-backup
   - piggybacks the nightly offsite rsync push (gated, one per OFFSITE_MIN_HOURS)
 - **Dashboard** `POST /run/<service>/<procedure>` ("Run now" button)
 
+## Dashboard pages
+
+- `/` — status grid: latest run per procedure, next scheduled run, "Run now",
+  per-app pages and Snapshot/Download links.
+- `/service/<service>` — one app: its procedures plus full run history
+  (state dir runs.jsonl), with download links per historical snapshot.
+- `/snapshots/<service>/<procedure>` — restic snapshots for a procedure;
+  download a whole snapshot (tar.gz), a file, or a db dump (via `restic dump`).
+  Whole-snapshot downloads restore to a temp dir under the state dir first —
+  mind free disk space.
+- `/settings/backups` — edit the configured services & procedures on file:
+  schedules, paths, containers/db user, add/remove/rename, plus a timers
+  reinstall button. Writes are validated and atomic; ${VAR} references are
+  preserved. Saving regenerates the systemd timers.
+- `/settings` — root-level settings (the agent .env keys: data root, state
+  dir, ports, offsite fallbacks), the yaml top-level defaults (restic repo +
+  retention) and the offsite section: master switch, legacy primary host/path
+  and a list of rsync targets (pushes fan out to each enabled target) with a
+  "push now" button and recent-push results.
+
 ## Restores
 
 Files (restic restores any snapshot):

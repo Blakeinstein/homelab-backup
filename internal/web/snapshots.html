@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>homelab-backup — snapshots</title>
+  {{template "style"}}
+</head>
+<body>
+  <h1>Snapshots — {{.Svc}} / {{.Proc}}</h1>
+  <p class="sub">
+    type: {{.ProcType}} &middot; restic repo tags <code>service:{{.Svc}}</code>, <code>procedure:{{.Proc}}</code>
+    {{if eq .ProcType "postgres_dump"}} &middot; dump: <code>{{.Svc}}-{{.Proc}}.sql.gz</code>{{end}}
+  </p>
+  {{template "nav" .Nav}}
+  {{if .Flash}}<div class="flash">{{.Flash}}</div>{{end}}
+
+  {{if .SnapErr}}
+    <div class="err-banner">Listing snapshots failed:
+{{.SnapErr}}</div>
+    <p class="muted">Is the restic repository initialized (<code>homelab-backup init</code>) and has anything been backed up yet?</p>
+  {{else}}
+    {{if not .Snaps}}<p class="muted">No snapshots yet — run a backup first.</p>{{end}}
+    {{range .Snaps}}
+      <details>
+        <summary>
+          <code>{{.Short}}</code> &middot; <span class="muted">{{.TimeFmt}}</span>{{if .Hostname}} &middot; <span class="muted">{{.Hostname}}</span>{{end}}
+        </summary>
+        {{if .Paths}}<div class="muted">paths: {{range .Paths}}<code>{{.}}</code> {{end}}</div>{{end}}
+        <div class="actions" style="margin-top:.5rem">
+          <a class="btn" href="/download/{{$.Svc}}/{{$.Proc}}?snap={{.Short}}">Download snapshot (tar.gz)</a>
+          {{if ne $.ProcType ""}}<a class="btn small" href="/download/{{$.Svc}}/{{$.Proc}}?snap={{.Short}}&browse=1">Reload page with file list</a>{{end}}
+        </div>
+      </details>
+    {{end}}
+    {{if .BrowseErr}}<div class="err-banner">{{.BrowseErr}}</div>{{end}}
+    {{if .Entries}}
+      <h2>Top-level files in "{{(index .Snaps 0).Short}}"</h2>
+      <table>
+        <thead><tr><th>Name</th><th>Type</th><th>Size</th><th></th></tr></thead>
+        <tbody>
+          {{range .Entries}}
+            <tr>
+              <td><code>{{.Path}}</code></td>
+              <td class="muted">{{.Type}}</td>
+              <td class="muted">{{if eq .Type "file"}}{{fmtBytes .Size}}{{end}}</td>
+              <td><a class="btn small" href="/download/{{$.Svc}}/{{$.Proc}}?snap={{(index $.Snaps 0).Short}}&file={{.Path}}">Download{{if eq .Type "dir"}} (tar){{end}}</a></td>
+            </tr>
+          {{end}}
+        </tbody>
+      </table>
+      <p class="sub">Deeper files can be downloaded directly with <code>?file=&lt;path&gt;</code>.</p>
+    {{end}}
+  {{end}}
+  <p style="margin-top:1.5rem"><a class="btn small" href="/">← Back to status</a></p>
+</body>
+</html>
