@@ -246,7 +246,7 @@ func serve(envPath string) {
 			streamDump(w, r, env, cfg, snap, file)
 			return
 		}
-		if procType == "postgres_dump" {
+		if procType == "postgres_dump" || procType == "mariadb_dump" {
 			streamDump(w, r, env, cfg, snap, svcName+"-"+procID+".sql.gz")
 			return
 		}

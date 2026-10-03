@@ -1,5 +1,5 @@
 // Package runner executes backup procedures: restic file backups, live
-// Postgres dumps through podman exec, and restic retention.
+// Postgres/MariaDB dumps through podman exec, and restic retention.
 package runner
 
 import (
@@ -126,61 +126,96 @@ func execute(env *config.Env, cfg *config.Config, svcName string, svc *config.Se
 		if err != nil {
 			return err
 		}
-		if err := os.MkdirAll(env.StateDir, 0o755); err != nil {
-			return err
-		}
-		tmp, err := os.CreateTemp(env.StateDir, "dump-"+svcName+"-"+proc.ID+"-*.sql.gz")
-		if err != nil {
-			return err
-		}
-		defer func() { tmp.Close(); os.Remove(tmp.Name()) }()
-
 		// pg_dumpall inside the container piped through gzip
 		dumpArgs := []string{"exec"}
 		if pw != "" {
 			dumpArgs = append(dumpArgs, "-e", "PGPASSWORD="+pw)
 		}
 		dumpArgs = append(dumpArgs, proc.Container, "pg_dumpall", "-c", "-U", proc.DBUser)
-		dump := exec.Command(containerCmd, dumpArgs...)
-		gz := exec.Command("gzip")
-		pr, pwRdr := io.Pipe()
-		dump.Stdout = pwRdr
-		gz.Stdin = pr
-		gz.Stdout = tmp
-		if err := dump.Start(); err != nil {
-			return fmt.Errorf("starting dump: %w", err)
+		return runDbDump(env, cfg, svcName, proc, containerCmd, dumpArgs)
+
+	case "mariadb_dump":
+		if proc.Container == "" || proc.DBUser == "" {
+			return fmt.Errorf("procedure %s/%s: mariadb_dump requires container and db_user", svcName, proc.ID)
 		}
-		if err := gz.Start(); err != nil {
-			return fmt.Errorf("starting gzip: %w", err)
+		svcEnv := svc.ServiceEnv(env, svcName)
+		if e := svcEnv["__load_error__"]; e != "" {
+			return fmt.Errorf("cannot load service env for %s: %s", svcName, e)
 		}
-		dumpErr := dump.Wait()
-		pwRdr.Close()
-		gzErr := gz.Wait()
-		if dumpErr != nil {
-			return fmt.Errorf("pg_dumpall in %s: %v", proc.Container, dumpErr)
-		}
-		if gzErr != nil {
-			return fmt.Errorf("gzip: %w", gzErr)
-		}
-		fi, err := tmp.Stat()
-		if err != nil || fi.Size() < 64 {
-			return fmt.Errorf("dump from %s produced no data", proc.Container)
-		}
-		// feed the dump into restic via stdin
-		f, err := os.Open(tmp.Name())
+		pw := ""
+		if proc.DBPassEnv != "" {
+			pw = svcEnv[proc.DBPassEnv]
+			if pw == "" {
+				return fmt.Errorf("service env for %s has no %s", svcName, proc.DBPassEnv)
+			}
+		} // pw == "" is allowed: instances using unix_socket auth don't need a password
+		containerCmd, err := detectContainerCmd()
 		if err != nil {
 			return err
 		}
-		defer f.Close()
-		args := []string{"backup", "--json",
-			"--tag", "service:" + svcName, "--tag", "procedure:" + proc.ID, "--tag", "db_dump",
-			"--stdin", "--stdin-filename", svcName+"-"+proc.ID+".sql.gz",
+		// mariadb-dump inside the container piped through gzip (MYSQL_PWD
+		// keeps the password out of the process list inside the container)
+		dumpArgs := []string{"exec"}
+		if pw != "" {
+			dumpArgs = append(dumpArgs, "-e", "MYSQL_PWD="+pw)
 		}
-		return backupRun(env, cfg, f, args...)
+		dumpArgs = append(dumpArgs, proc.Container, "mariadb-dump", "--all-databases", "-u", proc.DBUser)
+		return runDbDump(env, cfg, svcName, proc, containerCmd, dumpArgs)
 
 	default:
 		return fmt.Errorf("unknown procedure type %q for %s/%s", proc.Type, svcName, proc.ID)
 	}
+}
+
+// runDbDump pipes a database dump (already built podman exec + dump command)
+// through gzip into restic via stdin, shared by postgres_dump and mariadb_dump.
+func runDbDump(env *config.Env, cfg *config.Config, svcName string, proc *config.Procedure, containerCmd string, dumpArgs []string) error {
+	if err := os.MkdirAll(env.StateDir, 0o755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(env.StateDir, "dump-"+svcName+"-"+proc.ID+"-*.sql.gz")
+	if err != nil {
+		return err
+	}
+	defer func() { tmp.Close(); os.Remove(tmp.Name()) }()
+
+	dump := exec.Command(containerCmd, dumpArgs...)
+	gz := exec.Command("gzip")
+	pr, pwRdr := io.Pipe()
+	dump.Stdout = pwRdr
+	dump.Stderr = os.Stderr
+	gz.Stdin = pr
+	gz.Stdout = tmp
+	if err := dump.Start(); err != nil {
+		return fmt.Errorf("starting dump: %w", err)
+	}
+	if err := gz.Start(); err != nil {
+		return fmt.Errorf("starting gzip: %w", err)
+	}
+	dumpErr := dump.Wait()
+	pwRdr.Close()
+	gzErr := gz.Wait()
+	if dumpErr != nil {
+		return fmt.Errorf("dump in %s: %v", proc.Container, dumpErr)
+	}
+	if gzErr != nil {
+		return fmt.Errorf("gzip: %w", gzErr)
+	}
+	fi, err := tmp.Stat()
+	if err != nil || fi.Size() < 64 {
+		return fmt.Errorf("dump from %s produced no data", proc.Container)
+	}
+	// feed the dump into restic via stdin
+	f, err := os.Open(tmp.Name())
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	args := []string{"backup", "--json",
+		"--tag", "service:" + svcName, "--tag", "procedure:" + proc.ID, "--tag", "db_dump",
+		"--stdin", "--stdin-filename", svcName+"-"+proc.ID+".sql.gz",
+	}
+	return backupRun(env, cfg, f, args...)
 }
 
 // backupRun executes `restic backup` with the supplied args (optionally

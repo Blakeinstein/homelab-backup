@@ -67,6 +67,7 @@
             <select name="type">
               <option value="files" {{if eq .Type "files"}}selected{{end}}>files</option>
               <option value="postgres_dump" {{if eq .Type "postgres_dump"}}selected{{end}}>postgres_dump</option>
+              <option value="mariadb_dump" {{if eq .Type "mariadb_dump"}}selected{{end}}>mariadb_dump</option>
             </select>
           </div>
           <div class="field">
@@ -111,6 +112,7 @@
             <select name="type">
               <option value="files">files</option>
               <option value="postgres_dump">postgres_dump</option>
+              <option value="mariadb_dump">mariadb_dump</option>
             </select>
           </div>
           <div class="field"><label>schedule (cron)</label><input type="text" name="schedule" placeholder="0 2 * * *"></div>

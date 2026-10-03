@@ -676,8 +676,12 @@ func validateProcForm(typ, schedRaw, container, dbUser string, paths []string) s
 		if container == "" || dbUser == "" {
 			return "postgres_dump procedures need container and db_user"
 		}
+	case "mariadb_dump":
+		if container == "" || dbUser == "" {
+			return "mariadb_dump procedures need container and db_user"
+		}
 	default:
-		return "type must be files or postgres_dump"
+		return "type must be files, postgres_dump or mariadb_dump"
 	}
 	return ""
 }

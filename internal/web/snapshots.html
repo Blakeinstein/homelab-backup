@@ -10,7 +10,7 @@
   <h1>Snapshots — {{.Svc}} / {{.Proc}}</h1>
   <p class="sub">
     type: {{.ProcType}} &middot; restic repo tags <code>service:{{.Svc}}</code>, <code>procedure:{{.Proc}}</code>
-    {{if eq .ProcType "postgres_dump"}} &middot; dump: <code>{{.Svc}}-{{.Proc}}.sql.gz</code>{{end}}
+    {{if or (eq .ProcType "postgres_dump") (eq .ProcType "mariadb_dump")}} &middot; dump: <code>{{.Svc}}-{{.Proc}}.sql.gz</code>{{end}}
   </p>
   {{template "nav" .Nav}}
   {{if .Flash}}<div class="flash">{{.Flash}}</div>{{end}}

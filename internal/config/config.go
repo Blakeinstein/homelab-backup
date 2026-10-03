@@ -137,7 +137,7 @@ type Service struct {
 
 type Procedure struct {
 	ID        string   `yaml:"id"`
-	Type      string   `yaml:"type"` // postgres_dump | files
+	Type      string   `yaml:"type"` // postgres_dump | mariadb_dump | files
 	Schedule  string   `yaml:"schedule"`
 	Container string   `yaml:"container,omitempty"`
 	DBUser    string   `yaml:"db_user,omitempty"`

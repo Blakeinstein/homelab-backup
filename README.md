@@ -93,6 +93,13 @@ restic dump latest <svc>-<proc>.sql.gz | gunzip | \
   podman exec -i -e PGPASSWORD=… <db-container> psql -U <user> -d postgres
 ```
 
+MariaDB dumps (same stdin convention, `mariadb-dump --all-databases`):
+
+```sh
+restic dump latest <svc>-<proc>.sql.gz | gunzip | \
+  podman exec -i -e MYSQL_PWD=… <db-container> mariadb
+```
+
 ## Logos
 
 The dashboard resolves each service's icon as follows:
