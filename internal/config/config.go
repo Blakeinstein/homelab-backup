@@ -56,14 +56,17 @@ type OffsiteYAML struct {
 	Targets []OffsiteTarget `yaml:"targets,omitempty"`
 }
 
-// OffsiteTarget is one rsync push destination.
+// OffsiteTarget is one offsite push destination. Set either host+path
+// (rsync over ssh) or remote (any rclone remote path, e.g. a gdrive or
+// crypt remote); when remote is set the rsync fields are ignored.
 type OffsiteTarget struct {
 	Name    string `yaml:"name"`
 	Enabled *bool  `yaml:"enabled,omitempty"` // absent = enabled
-	Host    string `yaml:"host"`
-	Path    string `yaml:"path"`
+	Host    string `yaml:"host,omitempty"`
+	Path    string `yaml:"path,omitempty"`
 	SSHUser string `yaml:"ssh_user,omitempty"`
 	SSHKey  string `yaml:"ssh_key,omitempty"`
+	Remote  string `yaml:"remote,omitempty"`
 	Flags   string `yaml:"flags,omitempty"`
 }
 

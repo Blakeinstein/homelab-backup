@@ -73,7 +73,10 @@ systemctl --user enable --now homelab-backup
 - `/settings` — root-level settings (the agent .env keys: data root, state
   dir, ports, offsite fallbacks), the yaml top-level defaults (restic repo +
   retention) and the offsite section: master switch, legacy primary host/path
-  and a list of rsync targets (pushes fan out to each enabled target) with a
+  and a list of rsync targets (pushes fan out to each enabled target — a
+  target is either rsync over ssh (host+path) or any rclone remote via
+  `remote:` (e.g. `gdrive-crypt:homelab` for Google Drive); the legacy
+  host/path applies only while no targets are listed) with a
   "push now" button and recent-push results.
 
 ## Restores

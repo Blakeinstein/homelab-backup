@@ -97,6 +97,9 @@
         <div class="field"><label>path</label><input type="text" name="path" value="{{.Path}}"></div>
         <div class="field"><label>ssh user</label><input type="text" name="ssh_user" value="{{.SSHUser}}"></div>
         <div class="field"><label>ssh key</label><input type="text" name="ssh_key" value="{{.SSHKey}}"></div>
+        <div class="field"><label>rclone remote</label><input type="text" name="remote" value="{{.Remote}}" placeholder="gdrive-crypt:homelab-backup">
+          <div class="hint">when set, takes priority over host/path (rclone sync replaces rsync)</div>
+        </div>
         <div class="field"><label>rsync flags</label><input type="text" name="flags" value="{{.Flags}}"></div>
       </div>
       <p class="actions">
@@ -115,6 +118,9 @@
         <div class="field"><label>path</label><input type="text" name="path" placeholder="/mnt/backups/homelab"></div>
         <div class="field"><label>ssh user</label><input type="text" name="ssh_user"></div>
         <div class="field"><label>ssh key</label><input type="text" name="ssh_key"></div>
+        <div class="field"><label>rclone remote</label><input type="text" name="remote" placeholder="gdrive-crypt:homelab-backup">
+          <div class="hint">rsync when empty; rclone remote name when set</div>
+        </div>
         <div class="field"><label>rsync flags</label><input type="text" name="flags"></div>
       </div>
       <div class="checks"><label><input type="checkbox" name="enabled" checked> enabled</label></div>

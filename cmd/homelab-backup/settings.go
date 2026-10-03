@@ -137,8 +137,8 @@ func errText(err error) string {
 // ---- visible data for the offsite/rsync card -------------------------------
 
 type targetRow struct {
-	Name, Host, Path, SSHUser, SSHKey, Flags string
-	Enabled                                  bool
+	Name, Host, Path, SSHUser, SSHKey, Remote, Flags string
+	Enabled                                         bool
 }
 
 type offsiteData struct {
@@ -169,7 +169,7 @@ func offsiteView(env *config.Env, cfgRaw *config.Config) offsiteData {
 	for _, t := range cfgRaw.Offsite.Targets {
 		o.Targets = append(o.Targets, targetRow{
 			Name: t.Name, Host: t.Host, Path: t.Path,
-			SSHUser: t.SSHUser, SSHKey: t.SSHKey, Flags: t.Flags,
+			SSHUser: t.SSHUser, SSHKey: t.SSHKey, Remote: t.Remote, Flags: t.Flags,
 			Enabled: t.IsEnabled(),
 		})
 	}
@@ -484,8 +484,9 @@ func settingsTargetSave(w http.ResponseWriter, r *http.Request, env *config.Env)
 		badFlash(w, r, "/settings", "target name 'primary' is reserved")
 		return
 	}
-	if host == "" || path == "" {
-		badFlash(w, r, "/settings", "target host and path are required")
+	remote := formStr(r.Form, "remote")
+	if remote == "" && (host == "" || path == "") {
+		badFlash(w, r, "/settings", "target needs host + path (rsync) or an rclone remote")
 		return
 	}
 	doc, root, err := loadRootYAML(env)
@@ -513,6 +514,7 @@ func settingsTargetSave(w http.ResponseWriter, r *http.Request, env *config.Env)
 	yamledit.SetString(t, "path", path)
 	setOrRemove(t, "ssh_user", formStr(r.Form, "ssh_user"))
 	setOrRemove(t, "ssh_key", formStr(r.Form, "ssh_key"))
+	setOrRemove(t, "remote", remote)
 	setOrRemove(t, "flags", formStr(r.Form, "flags"))
 	if r.Form.Has("enabled") {
 		yamledit.Remove(t, "enabled") // absence = enabled (default)

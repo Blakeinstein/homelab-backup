@@ -1,5 +1,6 @@
-// Package offsite pushes the restic repository to one or more remote hosts
-// via rsync. The destination list comes from config.OffsiteTargets: either
+// Package offsite pushes the restic repository to one or more remote
+// destinations via rsync (ssh targets) or rclone (gdrive/seedbox/other
+// cloud remotes). Destinations come from config.OffsiteTargets: either
 // the explicit offsite.targets list or the legacy single host/path pair.
 package offsite
 
@@ -45,44 +46,63 @@ func Push(env *config.Env, cfg *config.Config) (string, error) {
 	return strings.Join(msgs, "\n"), nil
 }
 
-// pushOne rsyncs the repo to a single destination and records the outcome.
+// pushOne syncs the repo to a single destination (rsync over ssh, or
+// any rclone remote when target.Remote is set) and records the outcome.
 func pushOne(env *config.Env, cfg *config.Config, t config.OffsiteTarget) (string, error) {
 	started := time.Now()
 	src := cfg.Defaults.ResticRepo
-	dst := t.Destination()
 
-	args := []string{}
-	if t.SSHKey != "" {
-		args = append(args, "-e", fmt.Sprintf("ssh -i %s -o IdentitiesOnly=yes", t.SSHKey))
+	prog, args := "rsync", []string{}
+	if t.Remote == "" {
+		dst := t.Destination()
+		if t.SSHKey != "" {
+			args = append(args, "-e", fmt.Sprintf("ssh -i %s -o IdentitiesOnly=yes", t.SSHKey))
+		}
+		flags := strings.Fields(t.Flags)
+		if len(flags) == 0 {
+			flags = defaultRsyncFlags()
+		}
+		args = append(args, flags...)
+		args = append(args, ensureSlash(src), dst)
+	} else {
+		dst := t.Remote
+		prog, args = "rclone", []string{"sync", "--delete"}
+		// custom flags replace nothing; defaults are minimal on purpose
+		// (--delete keeps the mirror faithful, rclone retries are built in)
+		if f := strings.Fields(t.Flags); len(f) > 0 {
+			args = append(args, f...)
+		}
+		args = append(args, ensureSlash(src), dst)
 	}
-	flags := strings.Fields(t.Flags)
-	if len(flags) == 0 {
-		flags = defaultRsyncFlags()
-	}
-	args = append(args, flags...)
-	args = append(args, ensureSlash(src), dst)
 
-	cmd := exec.Command("rsync", args...)
-	out, cmdErr := cmd.CombinedOutput()
+	out, cmdErr := exec.Command(prog, args...).CombinedOutput()
 
-	procName := "rsync"
+	procName := prog
 	if t.Name != "" && t.Name != "primary" {
-		procName = "rsync:" + t.Name
+		procName = prog + ":" + t.Name
 	}
 	status, msg := "success", ""
 	if cmdErr != nil {
 		status = "error"
-		msg = fmt.Sprintf("rsync to %s failed: %v\n%s", dst, cmdErr, strings.TrimSpace(string(out)))
+		msg = fmt.Sprintf("%s to %s failed: %v\n%s", prog, dstLabel(prog, args), cmdErr, strings.TrimSpace(string(out)))
 	}
 	_ = store.Append(env.StateDir, store.Run{
 		Service: "offsite", Procedure: procName,
-		Type: "rsync", StartedAt: started,
+		Type: prog, StartedAt: started,
 		Duration: time.Since(started).Seconds(), Status: status, Message: msg,
 	})
 	if cmdErr != nil {
 		return msg, cmdErr
 	}
-	return "pushed restic repo → " + dst, nil
+	return "pushed restic repo → " + dstLabel(prog, args), nil
+}
+
+// dstLabel renders the destination tail of the push command for logs.
+func dstLabel(prog string, args []string) string {
+	if len(args) == 0 {
+		return prog
+	}
+	return args[len(args)-2] + " → " + args[len(args)-1]
 }
 
 // ensureSlash keeps the trailing slash on the local source path so the repo
