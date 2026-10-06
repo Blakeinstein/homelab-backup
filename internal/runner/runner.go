@@ -26,6 +26,11 @@ var lastSummary struct {
 	Warnings []string
 }
 
+// retentionScope holds the service/procedure of the run that triggered
+// applyRetention, so restic forget expiry is scoped to that procedure's
+// snapshots only (see applyRetention for why).
+var retentionScopeSvc, retentionScopeProc string
+
 func resticEnv(env *config.Env, cfg *config.Config) []string {
 	return append(os.Environ(),
 		"RESTIC_REPOSITORY="+cfg.Defaults.ResticRepo,
@@ -69,6 +74,7 @@ func Run(env *config.Env, cfg *config.Config, svcName string, svc *config.Servic
 		Status:    "success",
 	}
 	lastSummary.Warnings = nil
+	retentionScopeSvc, retentionScopeProc = svcName, proc.ID
 	err := execute(env, cfg, svcName, svc, proc)
 	run.Duration = time.Since(started).Seconds()
 	if err != nil {
@@ -275,6 +281,16 @@ func applyRetention(env *config.Env, cfg *config.Config) error {
 	args := []string{"forget",
 		"--keep-daily", strconv.Itoa(orDefault(r.KeepDaily, 7)),
 		"--keep-weekly", strconv.Itoa(orDefault(r.KeepWeekly, 4)),
+	}
+	// Scope expiry to this procedure's snapshots via their unique tag.
+	// Without it, restic's keep-daily keeps ONE host snapshot per day
+	// ACROSS ALL TAGS: another service's same-day run (or a manual dump)
+	// occupies the day's slot and later `forget` runs prune this
+	// procedure's snapshots — which is how the sparkyfitness postgres
+	// dumps of Oct 4–6 were lost despite `keep_daily: 7`.
+	svc, proc := retentionScopeSvc, retentionScopeProc
+	if svc != "" {
+		args = append(args, "--tag", "service:"+svc, "--tag", "procedure:"+proc)
 	}
 	if err := restic(env, cfg, args...); err != nil {
 		return fmt.Errorf("retention (restic forget): %w", err)
