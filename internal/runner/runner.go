@@ -219,7 +219,7 @@ func runDbDump(env *config.Env, cfg *config.Config, svcName string, proc *config
 	defer f.Close()
 	args := []string{"backup", "--json",
 		"--tag", "service:" + svcName, "--tag", "procedure:" + proc.ID, "--tag", "db_dump",
-		"--stdin", "--stdin-filename", svcName+"-"+proc.ID+".sql.gz",
+		"--stdin", "--stdin-filename", svcName + "-" + proc.ID + ".sql.gz",
 	}
 	return backupRun(env, cfg, f, args...)
 }

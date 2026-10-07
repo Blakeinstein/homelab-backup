@@ -14,23 +14,23 @@ import (
 
 // EnvFile is the resolved set of variables from the agent's .env file.
 type Env struct {
-	Values          map[string]string
+	Values           map[string]string
 	BackupConfigPath string // HOMELAB_BACKUP_CONFIG
-	DataRoot        string
-	StateDir        string
+	DataRoot         string
+	StateDir         string
 	ContainerBaseDir string
-	Port            string
-	Addr            string
-	OffsiteHost     string
-	OffsitePath     string
-	EnvPath         string
+	Port             string
+	Addr             string
+	OffsiteHost      string
+	OffsitePath      string
+	EnvPath          string
 }
 
 // Config is the parsed backup-services.yaml.
 type Config struct {
-	Defaults Defaults             `yaml:"defaults"`
-	Services map[string]*Service  `yaml:"services"`
-	Offsite  OffsiteYAML          `yaml:"offsite"`
+	Defaults Defaults            `yaml:"defaults"`
+	Services map[string]*Service `yaml:"services"`
+	Offsite  OffsiteYAML         `yaml:"offsite"`
 }
 
 type Defaults struct {
@@ -50,6 +50,10 @@ type OffsiteYAML struct {
 	Flags   string `yaml:"flags"`
 	SSHUser string `yaml:"ssh_user"`
 	SSHKey  string `yaml:"ssh_key"`
+	// SSHPassword enables password-based ssh auth via sshpass. Prefer a
+	// key, but some rental boxes only ship a root password: set it here or
+	// in OFFSITE_SSH_PASS in the .env (keeps it out of the yaml and logs).
+	SSHPassword string `yaml:"ssh_password,omitempty"`
 
 	// Targets is the optional list of rsync destinations. When present it
 	// replaces the legacy single Host/Path target above.
@@ -66,8 +70,11 @@ type OffsiteTarget struct {
 	Path    string `yaml:"path,omitempty"`
 	SSHUser string `yaml:"ssh_user,omitempty"`
 	SSHKey  string `yaml:"ssh_key,omitempty"`
-	Remote  string `yaml:"remote,omitempty"`
-	Flags   string `yaml:"flags,omitempty"`
+	// password auth via sshpass (see OffsiteYAML note); overrides nothing —
+	// ssh_key wins if both are set.
+	SSHPassword string `yaml:"ssh_password,omitempty"`
+	Remote      string `yaml:"remote,omitempty"`
+	Flags       string `yaml:"flags,omitempty"`
 }
 
 // IsEnabled reports whether the target should participate in pushes.
@@ -89,9 +96,10 @@ func (t *OffsiteTarget) Destination() string {
 // .env fallbacks for host/path/ssh key).
 func (c *Config) OffsiteTargets(env *Env) []OffsiteTarget {
 	var out []OffsiteTarget
-	keyFallback := ""
+	keyFallback, passFallback := "", ""
 	if env != nil {
 		keyFallback = env.Values["OFFSITE_SSH_KEY"]
+		passFallback = env.Values["OFFSITE_SSH_PASS"]
 	}
 	if len(c.Offsite.Targets) > 0 {
 		for _, t := range c.Offsite.Targets {
@@ -100,6 +108,9 @@ func (c *Config) OffsiteTargets(env *Env) []OffsiteTarget {
 			}
 			if t.SSHKey == "" {
 				t.SSHKey = keyFallback
+			}
+			if t.SSHPassword == "" {
+				t.SSHPassword = passFallback
 			}
 			out = append(out, t)
 		}
@@ -119,20 +130,24 @@ func (c *Config) OffsiteTargets(env *Env) []OffsiteTarget {
 	if key == "" {
 		key = keyFallback
 	}
+	pass := c.Offsite.SSHPassword
+	if pass == "" {
+		pass = passFallback
+	}
 	return append(out, OffsiteTarget{
 		Name: "primary", Enabled: bPtr(true),
 		Host: host, Path: path,
-		SSHUser: c.Offsite.SSHUser, SSHKey: key, Flags: c.Offsite.Flags,
+		SSHUser: c.Offsite.SSHUser, SSHKey: key, SSHPassword: pass, Flags: c.Offsite.Flags,
 	})
 }
 
 func bPtr(v bool) *bool { return &v }
 
 type Service struct {
-	Disabled      bool         `yaml:"disabled"`
-	EnvFile       string       `yaml:"env_file"`
-	Logo          string       `yaml:"logo,omitempty"` // optional icon override: URL or local path
-	Procedures    []*Procedure `yaml:"procedures"`
+	Disabled   bool         `yaml:"disabled"`
+	EnvFile    string       `yaml:"env_file"`
+	Logo       string       `yaml:"logo,omitempty"` // optional icon override: URL or local path
+	Procedures []*Procedure `yaml:"procedures"`
 
 	// envVars holds the per-service credentials, loaded from EnvFile at runtime.
 	envVars map[string]string
@@ -203,16 +218,16 @@ func LoadEnv(path string) (*Env, error) {
 		}
 	}
 	return &Env{
-		Values:          values,
+		Values:           values,
 		BackupConfigPath: values["HOMELAB_BACKUP_CONFIG"],
-		DataRoot:        values["HOMELAB_DATA_ROOT"],
-		StateDir:        values["HOMELAB_BACKUP_STATE"],
+		DataRoot:         values["HOMELAB_DATA_ROOT"],
+		StateDir:         values["HOMELAB_BACKUP_STATE"],
 		ContainerBaseDir: values["HOMELAB_CONTAINER_BASE_DIR"],
-		Port:            valueOr(values, "HOMELAB_BACKUP_PORT", "3095"),
-		Addr:            valueOr(values, "HOMELAB_BACKUP_ADDR", ""),
-		OffsiteHost:     values["OFFSITE_HOST"],
-		OffsitePath:     values["OFFSITE_PATH"],
-		EnvPath:         path,
+		Port:             valueOr(values, "HOMELAB_BACKUP_PORT", "3095"),
+		Addr:             valueOr(values, "HOMELAB_BACKUP_ADDR", ""),
+		OffsiteHost:      values["OFFSITE_HOST"],
+		OffsitePath:      values["OFFSITE_PATH"],
+		EnvPath:          path,
 	}, nil
 }
 
@@ -267,9 +282,10 @@ func Load(envValues map[string]string, yamlPath string) (*Config, error) {
 }
 
 // ResolveIcon returns the effective icon source for a service:
-// 1. backup-services.yaml `logo:` (URL or local path)
-// 2. the app.yaml `icon:` next to the service units (Homeio's field — same
-//    value Homeio itself uses for the app tile icon)
+//  1. backup-services.yaml `logo:` (URL or local path)
+//  2. the app.yaml `icon:` next to the service units (Homeio's field — same
+//     value Homeio itself uses for the app tile icon)
+//
 // Empty when neither is set.
 func (s *Service) ResolveIcon(env *Env, svcName string) string {
 	if s.Logo != "" {
@@ -366,7 +382,7 @@ func expand(s string, overrides map[string]string) string {
 			for j < len(out) && isNameChar(out[j]) {
 				j++
 			}
-			b.WriteString(get(out[i+1:j]))
+			b.WriteString(get(out[i+1 : j]))
 			i = j - 1
 			continue
 		}

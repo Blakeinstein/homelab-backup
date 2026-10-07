@@ -203,10 +203,10 @@ func serve(envPath string) {
 			}
 		}
 		data := map[string]any{
-			"Nav": navData{Current: "/snapshots"},
+			"Nav":  navData{Current: "/snapshots"},
 			"Port": env.Port, "EnvPath": env.EnvPath, "ConfigPath": env.BackupConfigPath,
 			"Svc": svcName, "Proc": procID, "ProcType": procType,
-			"Snaps": snaps,
+			"Snaps":  snaps,
 			"Browse": browse != nil, "Entries": browse, "BrowseErr": browseErr,
 			"SnapErr": errText(err), "Flash": flashRead(w, r),
 		}
@@ -283,7 +283,7 @@ func serve(envPath string) {
 		history := serviceHistory(env, svcName, svc.Logo != "")
 		hasLogo := web.HasAsset("assets/"+svcName+".svg") || web.HasAsset("assets/"+svcName+".png") || svc.Logo != ""
 		render(w, "service.html", map[string]any{
-			"Nav": navData{Current: "/service"},
+			"Nav":  navData{Current: "/service"},
 			"Port": env.Port, "EnvPath": env.EnvPath, "ConfigPath": env.BackupConfigPath,
 			"Name": svcName, "HasLogo": hasLogo,
 			"Rows": rows, "History": history,

@@ -51,50 +51,73 @@ func Push(env *config.Env, cfg *config.Config) (string, error) {
 func pushOne(env *config.Env, cfg *config.Config, t config.OffsiteTarget) (string, error) {
 	started := time.Now()
 	src := cfg.Defaults.ResticRepo
+	prog := "rsync"
+	var label string
 
-	prog, args := "rsync", []string{}
+	record := func(status, msg string, err error) (string, error) {
+		procName := prog
+		if t.Name != "" && t.Name != "primary" {
+			procName = prog + ":" + t.Name
+		}
+		_ = store.Append(env.StateDir, store.Run{
+			Service: "offsite", Procedure: procName,
+			Type: prog, StartedAt: started,
+			Duration: time.Since(started).Seconds(), Status: status, Message: msg,
+		})
+		if err != nil {
+			return msg, err
+		}
+		return msg, nil
+	}
+
+	var out *exec.Cmd
 	if t.Remote == "" {
-		dst := t.Destination()
+		label = t.Destination()
+		var rsyncArgs []string
 		if t.SSHKey != "" {
-			args = append(args, "-e", fmt.Sprintf("ssh -i %s -o IdentitiesOnly=yes", t.SSHKey))
+			rsyncArgs = append(rsyncArgs, "-e", fmt.Sprintf("ssh -i %s -o IdentitiesOnly=yes", t.SSHKey))
 		}
 		flags := strings.Fields(t.Flags)
 		if len(flags) == 0 {
 			flags = defaultRsyncFlags()
 		}
-		args = append(args, flags...)
-		args = append(args, ensureSlash(src), dst)
+		rsyncArgs = append(rsyncArgs, flags...)
+		rsyncArgs = append(rsyncArgs, ensureSlash(src), label)
+
+		if t.SSHPassword != "" && t.SSHKey == "" {
+			// Password auth: rsync runs under sshpass -e with SSHPASS in
+			// the child env, so the secret never shows in ps output.
+			sshpass, err := exec.LookPath("sshpass")
+			if err != nil {
+				return record("error", "password auth needs sshpass: sudo apt install sshpass (or use ssh_key)", err)
+			}
+			out = exec.Command(sshpass, append([]string{"-e", "rsync"}, rsyncArgs...)...)
+			out.Env = append(os.Environ(), "SSHPASS="+t.SSHPassword)
+		} else {
+			out = exec.Command("rsync", rsyncArgs...)
+		}
 	} else {
-		dst := t.Remote
-		prog, args = "rclone", []string{"sync", "--delete"}
+		label = t.Remote
+		prog = "rclone"
+		out = exec.Command("rclone", "sync", "--delete")
 		// custom flags replace nothing; defaults are minimal on purpose
 		// (--delete keeps the mirror faithful, rclone retries are built in)
 		if f := strings.Fields(t.Flags); len(f) > 0 {
-			args = append(args, f...)
+			out.Args = append(out.Args, f...)
 		}
-		args = append(args, ensureSlash(src), dst)
+		out.Args = append(out.Args, ensureSlash(src), label)
 	}
 
-	out, cmdErr := exec.Command(prog, args...).CombinedOutput()
+	outBytes, cmdErr := out.CombinedOutput()
 
-	procName := prog
-	if t.Name != "" && t.Name != "primary" {
-		procName = prog + ":" + t.Name
-	}
 	status, msg := "success", ""
 	if cmdErr != nil {
 		status = "error"
-		msg = fmt.Sprintf("%s to %s failed: %v\n%s", prog, dstLabel(prog, args), cmdErr, strings.TrimSpace(string(out)))
+		msg = fmt.Sprintf("%s to %s failed: %v\n%s", prog, label, cmdErr, strings.TrimSpace(string(outBytes)))
+	} else {
+		msg = "pushed restic repo → " + label
 	}
-	_ = store.Append(env.StateDir, store.Run{
-		Service: "offsite", Procedure: procName,
-		Type: prog, StartedAt: started,
-		Duration: time.Since(started).Seconds(), Status: status, Message: msg,
-	})
-	if cmdErr != nil {
-		return msg, cmdErr
-	}
-	return "pushed restic repo → " + dstLabel(prog, args), nil
+	return record(status, msg, cmdErr)
 }
 
 // dstLabel renders the destination tail of the push command for logs.

@@ -17,11 +17,11 @@ import (
 	"strconv"
 	"strings"
 
+	"gopkg.in/yaml.v3"
 	"homelab-backup/internal/config"
 	"homelab-backup/internal/schedule"
 	"homelab-backup/internal/store"
 	"homelab-backup/internal/yamledit"
-	"gopkg.in/yaml.v3"
 )
 
 // ---- flash helpers ---------------------------------------------------------
@@ -138,7 +138,7 @@ func errText(err error) string {
 
 type targetRow struct {
 	Name, Host, Path, SSHUser, SSHKey, Remote, Flags string
-	Enabled                                         bool
+	Enabled                                          bool
 }
 
 type offsiteData struct {
@@ -429,7 +429,7 @@ func settingsDefaultsSave(w http.ResponseWriter, r *http.Request, env *config.En
 		return
 	}
 	msg := afterYAMLChange(env)
-	flashSet(w, "Saved backup defaults — " + msg)
+	flashSet(w, "Saved backup defaults — "+msg)
 	http.Redirect(w, r, "/settings", http.StatusSeeOther)
 }
 
@@ -563,7 +563,7 @@ func settingsTargetDelete(w http.ResponseWriter, r *http.Request, env *config.En
 		badFlash(w, r, "/settings", "yaml: "+err.Error())
 		return
 	}
-	flashSet(w, "Deleted rsync target " + name)
+	flashSet(w, "Deleted rsync target "+name)
 	http.Redirect(w, r, "/settings", http.StatusSeeOther)
 }
 
@@ -605,14 +605,14 @@ func envOrDefault(vals map[string]string, key, def string) string {
 // ---- backups panel (edit services & procedures in the yaml) -----------------
 
 type procRow struct {
-	Svc         string
-	ID          string
-	Type        string
-	Schedule    string
-	Container   string
-	DBUser      string
-	DBPassEnv   string
-	Paths       string // newline-separated for the textarea
+	Svc       string
+	ID        string
+	Type      string
+	Schedule  string
+	Container string
+	DBUser    string
+	DBPassEnv string
+	Paths     string // newline-separated for the textarea
 }
 
 type svcRow struct {

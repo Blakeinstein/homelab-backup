@@ -75,6 +75,23 @@ systemctl --user enable --now homelab-backup
   retention) and the offsite section: master switch, legacy primary host/path
   and a list of rsync targets (pushes fan out to each enabled target — a
   target is either rsync over ssh (host+path) or any rclone remote via
+
+  **Offsite auth**
+
+  - rsync over ssh: prefer a key (`ssh_key:` / `OFFSITE_SSH_KEY`). If a box only
+    offers password auth, set `ssh_password:` per target or `OFFSITE_SSH_PASS`
+    in the env — the agent wraps rsync in `sshpass -e`, so the password is
+    passed by environment only (never in argv or logs). Requires `sshpass`.
+
+  - rclone remotes (gdrive, sftp, b2, crypt, …): configure once per user with
+    `rclone config` (rclone keeps those credentials in its own config file,
+    never in this repo), then add a target with `remote:`:
+  ```yaml
+  targets:
+    - name: gdrive
+      remote: gdrive-crypt:homelab-backup
+      flags: --bwlimit 2M   # optional
+  ```
   `remote:` (e.g. `gdrive-crypt:homelab` for Google Drive); the legacy
   host/path applies only while no targets are listed) with a
   "push now" button and recent-push results.
