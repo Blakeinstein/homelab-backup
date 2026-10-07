@@ -99,9 +99,9 @@ func pushOne(env *config.Env, cfg *config.Config, t config.OffsiteTarget) (strin
 	} else {
 		label = t.Remote
 		prog = "rclone"
-		out = exec.Command("rclone", "sync", "--delete")
-		// custom flags replace nothing; defaults are minimal on purpose
-		// (--delete keeps the mirror faithful, rclone retries are built in)
+		out = exec.Command("rclone", "sync")
+		// sync deletes extraneous files by default, keeping the mirror
+		// faithful (and running restic prune propagates deletions)
 		if f := strings.Fields(t.Flags); len(f) > 0 {
 			out.Args = append(out.Args, f...)
 		}
